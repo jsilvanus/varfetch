@@ -1,6 +1,6 @@
 {
   "name": "varfetch",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Fire configured HTTP requests with {{variable}} interpolation, an SSRF guard and JSON path mapping of the response onto named variables.",
   "type": "module",
   "main": "src/index.js",
@@ -11,7 +11,7 @@
       "default": "./src/index.js"
     }
   },
-  "files": ["src", "LICENSE", "README.md"],
+  "files": ["src", "docs", "LICENSE", "README.md", "CHANGELOG.md"],
   "scripts": {
     "test": "node --test test/*.test.js"
   },

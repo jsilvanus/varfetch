@@ -9,12 +9,14 @@ const VAR_RE = /\{\{\s*([\p{L}_][\p{L}\p{N}_-]*)\s*\}\}/gu;
  * A missing variable renders as an empty string.
  * @param {string} text
  * @param {Record<string, unknown>} [variables]
+ * @param {(value: string) => string} [encode] applied to each inserted value
  */
-export function interpolate(text, variables) {
+export function interpolate(text, variables, encode) {
   if (typeof text !== 'string' || !text.includes('{{')) return text;
   return text.replace(VAR_RE, (_match, name) => {
     const value = variables?.[name];
-    return value === undefined || value === null ? '' : String(value);
+    if (value === undefined || value === null) return '';
+    return encode ? encode(String(value)) : String(value);
   });
 }
 

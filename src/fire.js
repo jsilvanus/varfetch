@@ -1,5 +1,6 @@
 import { buildRequest, mapResponse } from './request.js';
 import { checkUrlAllowed } from './network-guard.js';
+import { pinnedFetch } from './transport.js';
 
 const MAX_REDIRECTS = 5;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -9,22 +10,26 @@ const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
  * Send a request and map the response onto variables.
  *
  * Every URL is checked with the SSRF guard, redirects included (they are
- * followed here, up to 5, instead of by fetch).
+ * followed here, up to 5, instead of by fetch). Unless a custom `fetch` is
+ * given, the connection goes only to the addresses the guard validated
+ * (`pinnedFetch`), so DNS rebinding between check and connect is not possible.
+ * A custom `fetch` resolves the host itself and is therefore checked, not pinned.
  *
  * @param {object} args
  * @param {import('./index.js').Connector} args.connector
  * @param {import('./index.js').RequestDef} args.request
  * @param {Record<string, unknown>} [args.variables] values for {{name}}
  * @param {{ allow?: string[], deny?: string[] }} [args.network] extra guard patterns, see network-guard.js
- * @param {typeof fetch} [args.fetch]
+ * @param {typeof fetch} [args.fetch] replaces the pinned transport (tests, proxies); DNS pinning does not apply to it
+ * @param {boolean} [args.encodePathVariables] run variable values in the path through encodeURIComponent
  * @param {number} [args.timeoutMs] default 10000
  * @param {number} [args.maxBytes] response size limit, default 5 MiB
  * @returns {Promise<import('./index.js').FireResult>}
  */
-export async function fireRequest({ connector, request, variables = {}, network = {}, fetch: fetchImpl = fetch, timeoutMs, maxBytes = DEFAULT_MAX_BYTES }) {
+export async function fireRequest({ connector, request, variables = {}, network = {}, fetch: fetchImpl, timeoutMs, maxBytes = DEFAULT_MAX_BYTES, encodePathVariables = false }) {
   let built;
   try {
-    built = buildRequest(connector, request, variables);
+    built = buildRequest(connector, request, variables, { encodePathVariables });
   } catch (err) {
     return { ok: false, values: {}, error: `Invalid request: ${err.message}` };
   }
@@ -40,12 +45,15 @@ export async function fireRequest({ connector, request, variables = {}, network 
     let response;
 
     for (let hop = 0; ; hop++) {
-      const guard = await checkUrlAllowed(url, network);
+      const guard = await checkUrlAllowed(url, { ...network, signal });
       if (!guard.allowed) return { ok: false, values: {}, error: guard.reason };
 
-      response = await fetchImpl(url, { method, headers, body, redirect: 'manual', signal });
+      response = fetchImpl
+        ? await fetchImpl(url, { method, headers, body, redirect: 'manual', signal })
+        : await pinnedFetch(url, { method, headers, body, signal }, { addresses: guard.addresses });
       const location = response.status >= 300 && response.status < 400 ? response.headers.get('location') : null;
       if (!location) break;
+      await response.body?.cancel().catch(() => {});
       if (hop >= MAX_REDIRECTS) return { ok: false, values: {}, status: response.status, error: 'Too many redirects' };
 
       const next = new URL(location, url);
@@ -79,7 +87,7 @@ export async function fireRequest({ connector, request, variables = {}, network 
     }
     return { ok: true, status: response.status, values: mapResponse(request.mappings, parsed), body: parsed };
   } catch (err) {
-    const message = err?.name === 'TimeoutError' ? `Timed out after ${timeout} ms` : err?.message ?? String(err);
+    const message = err?.name === 'TimeoutError' || (err?.name === 'AbortError' && signal.aborted) ? `Timed out after ${timeout} ms` : err?.message ?? String(err);
     return { ok: false, values: {}, error: message };
   }
 }

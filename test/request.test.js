@@ -69,3 +69,16 @@ describe('mapResponse', () => {
     assert.deepEqual(mapResponse(undefined, body), {});
   });
 });
+
+describe('encodePathVariables', () => {
+  const plain = { baseUrl: 'https://api.example.org' };
+  test('off by default: a value can change the path', () => {
+    const { url } = buildRequest(plain, { path: '/day/{{d}}' }, { d: '../admin?x=1' });
+    assert.equal(url.pathname, '/admin');
+  });
+  test('on: the value stays one path segment', () => {
+    const { url } = buildRequest(plain, { path: '/day/{{d}}' }, { d: '../admin?x=1' }, { encodePathVariables: true });
+    assert.equal(url.pathname, '/day/..%2Fadmin%3Fx%3D1');
+    assert.equal(url.search, '');
+  });
+});
