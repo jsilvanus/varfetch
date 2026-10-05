@@ -60,10 +60,14 @@ export async function fireRequest({ connector, request, variables = {}, network 
       url = next;
     }
 
-    const text = await readLimited(response, maxBytes);
+    const bytes = await readLimited(response, maxBytes);
     if (!response.ok) return { ok: false, status: response.status, values: {}, error: `HTTP ${response.status}` };
 
     const contentType = response.headers.get('content-type') || '';
+    if (request.responseType === 'binary' || request.responseType === 'image') {
+      return { ok: true, status: response.status, values: {}, body: bytes, contentType };
+    }
+    const text = bytes.toString('utf8');
     const wantsJson = request.responseType === 'json' || ((request.responseType ?? 'auto') === 'auto' && /json/i.test(contentType));
     let parsed = text;
     if (wantsJson) {
@@ -83,7 +87,7 @@ export async function fireRequest({ connector, request, variables = {}, network 
 async function readLimited(response, maxBytes) {
   const declared = Number(response.headers.get('content-length'));
   if (declared > maxBytes) throw new Error(`Response larger than ${maxBytes} bytes`);
-  if (!response.body) return '';
+  if (!response.body) return Buffer.alloc(0);
   const reader = response.body.getReader();
   const chunks = [];
   let size = 0;
@@ -97,5 +101,5 @@ async function readLimited(response, maxBytes) {
     }
     chunks.push(value);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return Buffer.concat(chunks);
 }

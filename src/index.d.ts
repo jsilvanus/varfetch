@@ -31,7 +31,8 @@ export interface RequestDef {
   query?: Pair[];
   bodyType?: 'none' | 'json' | 'text';
   body?: string;
-  responseType?: 'auto' | 'json' | 'text';
+  /** `binary` and `image` return the raw bytes as `body` (a Buffer) and skip `mappings`. */
+  responseType?: 'auto' | 'json' | 'text' | 'binary' | 'image';
   mappings?: Mapping[];
   timeoutMs?: number;
 }
@@ -43,8 +44,10 @@ export interface FireResult {
   status?: number;
   /** Variable name to value; non-string values are JSON text. */
   values: Record<string, string | null>;
-  /** Parsed JSON, or the text for a non-JSON response. */
+  /** Parsed JSON, the text for a non-JSON response, or a Buffer for a `binary`/`image` request. */
   body?: unknown;
+  /** Response content-type, set for a `binary`/`image` request. */
+  contentType?: string;
   error?: string;
 }
 

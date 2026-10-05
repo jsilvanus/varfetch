@@ -34,6 +34,9 @@ before(async () => {
     } else if (req.url === '/big') {
       res.setHeader('content-type', 'text/plain');
       res.end('x'.repeat(2000));
+    } else if (req.url === '/png') {
+      res.setHeader('content-type', 'image/png');
+      res.end(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 255]));
     } else if (req.url === '/slow') {
       setTimeout(() => res.end('late'), 500);
     } else {
@@ -138,5 +141,24 @@ describe('fireRequest', () => {
     const result = await fireRequest({ connector: { baseUrl: 'not a url' }, request: { path: '/' } });
     assert.equal(result.ok, false);
     assert.match(result.error, /Invalid request/);
+  });
+});
+
+describe('fireRequest binary responses', () => {
+  test('returns the bytes and content type for responseType binary', async () => {
+    const result = await fireRequest({ connector: { baseUrl: base }, request: { path: '/png', responseType: 'image', mappings: [{ jsonPath: '$', variable: 'v' }] }, network: network() });
+    assert.equal(result.ok, true);
+    assert.equal(result.contentType, 'image/png');
+    assert.ok(Buffer.isBuffer(result.body));
+    assert.deepEqual([...result.body], [0x89, 0x50, 0x4e, 0x47, 0, 255]);
+    assert.deepEqual(result.values, {});
+  });
+
+  test('binary responses obey maxBytes and the redirect guard', async () => {
+    const big = await fireRequest({ connector: { baseUrl: base }, request: { path: '/big', responseType: 'binary' }, network: network(), maxBytes: 100 });
+    assert.equal(big.ok, false);
+    assert.match(big.error, /larger than/);
+    const redirect = await fireRequest({ connector: { baseUrl: base }, request: { path: '/redirect-internal', responseType: 'binary' }, network: network() });
+    assert.equal(redirect.ok, false);
   });
 });
