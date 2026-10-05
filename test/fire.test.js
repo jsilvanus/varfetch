@@ -128,7 +128,7 @@ describe('fireRequest', () => {
         : new Response('ok', { status: 200, headers: { 'content-type': 'text/plain' } });
     };
     const result = await fireRequest({
-      connector: { baseUrl: 'http://203.0.113.9', auth: { type: 'bearer', token: 'secret' }, headers: [{ key: 'X-Own', value: '1' }] },
+      connector: { baseUrl: 'http://93.184.216.35', auth: { type: 'bearer', token: 'secret' }, headers: [{ key: 'X-Own', value: '1' }] },
       request: { path: '/start', mappings: [{ jsonPath: '$', variable: 'v' }] },
       fetch: fakeFetch,
     });

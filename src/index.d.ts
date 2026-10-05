@@ -51,20 +51,26 @@ export interface FireResult {
   error?: string;
 }
 
-export function interpolate(text: string, variables?: Variables): string;
+export function interpolate(text: string, variables?: Variables, encode?: (value: string) => string): string;
 export function interpolatePairs(pairs: Pair[] | undefined, variables?: Variables): Pair[];
 export function extractVariableNames(text: string): string[];
 export function evaluateJsonPath(data: unknown, path: string): unknown;
 export function parsePattern(pattern: string): { kind: 'host' | 'ip' | 'cidr'; value: string; port: number | null };
 export function checkUrlAllowed(
   url: URL,
-  options?: NetworkRules & { lookup?: (host: string, opts: { all: true; verbatim: true }) => Promise<Array<{ address: string; family: number }>> },
-): Promise<{ allowed: boolean; reason?: string }>;
+  options?: NetworkRules & { signal?: AbortSignal; lookup?: (host: string, opts: { all: true; verbatim: true }) => Promise<Array<{ address: string; family: number }>> },
+): Promise<{ allowed: boolean; reason?: string; addresses?: Array<{ address: string; family: number }> }>;
+export function pinnedFetch(
+  url: URL,
+  init: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal },
+  pin: { addresses: Array<{ address: string; family: number }> },
+): Promise<Response>;
 export function buildAuthHeaders(auth: Auth | undefined, variables?: Variables): Record<string, string>;
 export function buildRequest(
   connector: Connector,
   request: RequestDef,
   variables?: Variables,
+  options?: { encodePathVariables?: boolean },
 ): { url: URL; method: string; headers: Record<string, string>; body?: string };
 export function mapResponse(mappings: Mapping[] | undefined, body: unknown): Record<string, string | null>;
 export function fireRequest(args: {
@@ -75,4 +81,5 @@ export function fireRequest(args: {
   fetch?: typeof fetch;
   timeoutMs?: number;
   maxBytes?: number;
+  encodePathVariables?: boolean;
 }): Promise<FireResult>;

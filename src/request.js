@@ -33,16 +33,18 @@ export function buildAuthHeaders(auth, variables) {
  * Path, query, headers and body are interpolated with `variables`.
  *
  * Variable values are put into the path as given, so a value containing `/`,
- * `?` or `#` changes the URL. Pass untrusted values through `encodeURIComponent`
- * yourself, or write `{{name}}` into a query parameter, which is encoded for you.
+ * `?` or `#` changes the URL. For untrusted values set `encodePathVariables`
+ * (each value goes through `encodeURIComponent`), or write `{{name}}` into a
+ * query parameter, which is always encoded.
  *
  * @param {import('./index.js').Connector} connector
  * @param {import('./index.js').RequestDef} request
  * @param {Record<string, unknown>} [variables]
+ * @param {{ encodePathVariables?: boolean }} [options]
  */
-export function buildRequest(connector, request, variables = {}) {
+export function buildRequest(connector, request, variables = {}, { encodePathVariables = false } = {}) {
   const base = connector.baseUrl.replace(/\/+$/, '');
-  const path = interpolate(request.path || '', variables);
+  const path = interpolate(request.path || '', variables, encodePathVariables ? encodeURIComponent : undefined);
   const url = new URL(base + (path.startsWith('/') ? path : `/${path}`));
   for (const { key, value } of interpolatePairs(request.query, variables)) {
     if (key) url.searchParams.append(key, value ?? '');

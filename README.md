@@ -1,48 +1,98 @@
 # varfetch
 
-Fire a configured HTTP request, with `{{variable}}` values in its path, query, headers and body, and map the JSON response onto named variables. No dependencies, ESM, Node 18+.
+Fire a configured HTTP request with `{{variable}}` values in its path, query, headers and body, and map the JSON response onto named variables. Zero dependencies, ESM, Node 18+.
 
-It is the small, database-free core of a "connector" feature: the application stores connectors and requests however it likes (a database, a config file) and passes them to `fireRequest`.
+varfetch is the small, database-free core of a "connector" feature. Your application stores connectors and requests however it likes (a database, a config file, a UI) and hands them to `fireRequest`. varfetch does the part that is easy to get wrong: building the request, refusing to be turned into an SSRF proxy, and extracting values from the answer.
 
 ```js
 import { fireRequest } from 'varfetch';
 
-const connector = {
-  baseUrl: 'https://api.example.org',
-  auth: { type: 'bearer', token: '...' },          // none | bearer | api_key | basic | custom
-  headers: [{ key: 'Accept-Language', value: 'fi' }],
-};
+const result = await fireRequest({
+  connector: {
+    baseUrl: 'https://api.example.org',
+    auth: { type: 'bearer', token: process.env.API_TOKEN },
+    headers: [{ key: 'Accept-Language', value: 'fi' }],
+  },
+  request: {
+    method: 'GET',
+    path: '/api/v1/date/{{date}}',
+    query: [{ key: 'cycles', value: 'false' }],
+    mappings: [
+      { jsonPath: '$.holyDay.name', variable: 'holyday' },
+      { jsonPath: '$.holyDay.texts.gospel.reference', variable: 'gospel' },
+    ],
+  },
+  variables: { date: '2026-10-11' },
+});
 
-const request = {
-  method: 'GET',
-  path: '/api/v1/date/{{date}}',
-  query: [{ key: 'cycles', value: 'false' }],
-  mappings: [
-    { jsonPath: '$.holyDay.name', variable: 'holyday' },
-    { jsonPath: '$.holyDay.texts.gospel.reference', variable: 'gospel' },
-  ],
-};
-
-const result = await fireRequest({ connector, request, variables: { date: '2026-10-11' } });
-// { ok: true, status: 200, values: { holyday: '...', gospel: '...' }, body: {...} }
+if (result.ok) console.log(result.values); // { holyday: '...', gospel: '...' }
+else console.error(result.error);
 ```
 
-## What it does
+`fireRequest` never throws: failures come back as `{ ok: false, error }`.
 
-- **Interpolation:** `{{name}}` in path, query values, header values, auth values and body. Missing variables become an empty string.
-- **JSON path:** `$`, `$.a.b`, `$.items[0].name`, `$['key']`. Own properties only.
-- **Binary:** `responseType: "binary"` (or `"image"`) returns the raw bytes as `body` (a Buffer) and the `contentType`, with the same guard, redirect and size limits; `mappings` are not applied.
-- **Mapping:** each mapping writes a string (or JSON text for objects and arrays) to a variable; `skipIfNull` (default true) leaves unresolved paths out.
-- **SSRF guard:** every URL, redirects included, is resolved and checked. Loopback, private, link-local, CGNAT, reserved and multicast addresses are blocked unless you allow them: `network: { allow: ['10.1.0.0/16', 'anno.internal:3000'], deny: ['*.blocked.example'] }`. `deny` wins over `allow`. The check happens before the connection and does not defend against DNS rebinding.
-- **Limits:** 10 s timeout and 5 MiB response by default (`timeoutMs`, `maxBytes`), at most 5 redirects, credentials and other connector headers are not forwarded to another origin.
+## Features
 
-Variable values are put into the path as given. A value containing `/`, `?` or `#` changes the URL, so run untrusted values through `encodeURIComponent`, or use them in a query parameter, which is encoded for you.
+| | |
+|---|---|
+| **Interpolation** | `{{name}}` in path, query values, header values, auth values and body. Names may contain letters (incl. ä/ö/å), digits, `_` and `-`. Missing variables render as an empty string. |
+| **Auth** | `none`, `bearer`, `api_key` (any header), `basic`, `custom` headers. Values are interpolated too. |
+| **JSON mapping** | `$`, `$.a.b`, `$.items[0].name`, `$['key']`. Own properties only (`$.constructor` resolves to nothing). Objects and arrays are stored as JSON text. |
+| **Response types** | `auto` (JSON when the content type says so), `json`, `text`, `binary` / `image` (raw `Buffer` plus content type). |
+| **SSRF guard** | Blocks loopback, private, link-local (cloud metadata), CGNAT, reserved, multicast and IPv6 forms that embed IPv4. Allow and deny rules by host, wildcard, IP or CIDR. Applied to every redirect hop. |
+| **DNS pinning** | The connection goes only to the addresses the guard validated, so DNS rebinding between check and connect is impossible. See [docs/security.md](docs/security.md). |
+| **Limits** | 10 s timeout, 5 MiB response (measured after decompression), at most 5 redirects. Credentials and connector headers are never sent to another origin after a redirect. |
 
-## API
+## Install
 
-`fireRequest({ connector, request, variables, network, fetch, timeoutMs, maxBytes })` returns `{ ok, status?, values, body?, error? }` and never throws.
+```sh
+npm install varfetch
+```
 
-Building blocks: `buildRequest(connector, request, variables)`, `buildAuthHeaders`, `mapResponse(mappings, body)`, `interpolate`, `interpolatePairs`, `extractVariableNames`, `evaluateJsonPath`, `checkUrlAllowed(url, { allow, deny })`, `parsePattern`. Types are in `src/index.d.ts`.
+Requires Node 18 or newer. There are no runtime dependencies. TypeScript types ship in the package.
+
+## Reaching private networks
+
+By default every private and internal address is refused. To let a server call an API on its own network, allow that target explicitly:
+
+```js
+await fireRequest({
+  connector, request, variables,
+  network: {
+    allow: ['anno.internal:3000', '10.1.0.0/16'],
+    deny: ['*.blocked.example'],   // deny always wins
+  },
+});
+```
+
+Keep these rules in server configuration (an environment variable, for example), not in anything a user of your application can edit. See the [integration guide](docs/integration-guide.md).
+
+## Path variables
+
+Variable values are put into the path as given. A value containing `/`, `?` or `#` changes the URL. If any value comes from a user, either pass `encodePathVariables: true` (each value goes through `encodeURIComponent`) or put it in a query parameter, which is always encoded.
+
+## API summary
+
+- `fireRequest({ connector, request, variables, network, timeoutMs, maxBytes, encodePathVariables, fetch })` → `{ ok, status?, values, body?, contentType?, error? }`
+- Building blocks: `buildRequest`, `buildAuthHeaders`, `mapResponse`, `interpolate`, `interpolatePairs`, `extractVariableNames`, `evaluateJsonPath`, `checkUrlAllowed`, `parsePattern`, `pinnedFetch`.
+
+Full reference: [docs/install-and-use.md](docs/install-and-use.md#api-reference). Types: [`src/index.d.ts`](src/index.d.ts).
+
+## Documentation
+
+- [Install and use guide](docs/install-and-use.md): data shapes, every option, recipes, troubleshooting
+- [Integration guide](docs/integration-guide.md): wiring varfetch into an application, with the Saarnavideo and LCYT integrations as worked examples
+- [Architecture](docs/architecture.md): modules, request lifecycle, design decisions
+- [Security model](docs/security.md): threat model, SSRF guard, DNS pinning, what is not covered
+- [Changelog](CHANGELOG.md)
+
+## Development
+
+```sh
+npm test    # node --test, no build step
+```
+
+CI runs the tests on Node 18, 20 and 22.
 
 ## License
 

@@ -70,3 +70,54 @@ describe('parsePattern', () => {
     assert.deepEqual(parsePattern('[::1]:11434'), { kind: 'ip', value: '::1', port: 11434 });
   });
 });
+
+describe('per-address allow rules', () => {
+  const lookup = async () => [{ address: '10.1.1.1', family: 4 }, { address: '169.254.169.254', family: 4 }];
+
+  test('a CIDR allow does not exempt other resolved addresses', async () => {
+    const result = await ok('http://multi.example/', { allow: ['10.0.0.0/8'], lookup });
+    assert.equal(result.allowed, false);
+  });
+
+  test('a hostname allow exempts every address of the host', async () => {
+    const result = await ok('http://multi.example/', { allow: ['multi.example'], lookup });
+    assert.equal(result.allowed, true);
+    assert.equal(result.addresses.length, 2);
+  });
+
+  test('deny matches any resolved address', async () => {
+    const result = await ok('http://multi.example/', { allow: ['multi.example'], deny: ['169.254.0.0/16'], lookup });
+    assert.equal(result.allowed, false);
+  });
+
+  test('returns the validated addresses', async () => {
+    const result = await ok('http://93.184.216.34/');
+    assert.deepEqual(result.addresses, [{ address: '93.184.216.34', family: 4 }]);
+  });
+});
+
+describe('hardening', () => {
+  test('blocks IPv6 forms that embed IPv4 and documentation ranges', async () => {
+    for (const host of ['[64:ff9b::7f00:1]', '[2002:7f00:1::1]', '[2001:db8::1]', '[::ffff:10.0.0.1]', '[::ffff:169.254.169.254]']) {
+      assert.equal((await ok(`http://${host}/`)).allowed, false, host);
+    }
+  });
+
+  test('a trailing dot does not dodge a deny pattern', async () => {
+    const lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+    const result = await ok('http://x.blocked.example./', { deny: ['*.blocked.example'], lookup });
+    assert.equal(result.allowed, false);
+  });
+
+  test('rejects credentials in the URL', async () => {
+    assert.equal((await ok('http://user:pw@93.184.216.34/')).allowed, false);
+  });
+
+  test('a hung DNS lookup ends with the abort signal', async () => {
+    const lookup = () => new Promise(() => {});
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new DOMException('timed out', 'TimeoutError')), 30);
+    await assert.rejects(ok('http://slow.example/', { lookup, signal: controller.signal }), { name: 'TimeoutError' });
+    clearTimeout(timer);
+  });
+});
