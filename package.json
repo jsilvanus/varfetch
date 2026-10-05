@@ -1,0 +1,32 @@
+{
+  "name": "varfetch",
+  "version": "0.1.0",
+  "description": "Fire configured HTTP requests with {{variable}} interpolation, an SSRF guard and JSON path mapping of the response onto named variables.",
+  "type": "module",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": ["src", "LICENSE", "README.md"],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": ["http", "variables", "api", "connector", "ssrf", "jsonpath"],
+  "author": "Juha Itäleino <jsilvanus@gmail.com>",
+  "license": "EUPL-1.2",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jsilvanus/varfetch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jsilvanus/varfetch/issues"
+  },
+  "homepage": "https://github.com/jsilvanus/varfetch#readme"
+}
