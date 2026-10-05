@@ -31,6 +31,7 @@ const result = await fireRequest({ connector, request, variables: { date: '2026-
 
 - **Interpolation:** `{{name}}` in path, query values, header values, auth values and body. Missing variables become an empty string.
 - **JSON path:** `$`, `$.a.b`, `$.items[0].name`, `$['key']`. Own properties only.
+- **Binary:** `responseType: "binary"` (or `"image"`) returns the raw bytes as `body` (a Buffer) and the `contentType`, with the same guard, redirect and size limits; `mappings` are not applied.
 - **Mapping:** each mapping writes a string (or JSON text for objects and arrays) to a variable; `skipIfNull` (default true) leaves unresolved paths out.
 - **SSRF guard:** every URL, redirects included, is resolved and checked. Loopback, private, link-local, CGNAT, reserved and multicast addresses are blocked unless you allow them: `network: { allow: ['10.1.0.0/16', 'anno.internal:3000'], deny: ['*.blocked.example'] }`. `deny` wins over `allow`. The check happens before the connection and does not defend against DNS rebinding.
 - **Limits:** 10 s timeout and 5 MiB response by default (`timeoutMs`, `maxBytes`), at most 5 redirects, credentials and other connector headers are not forwarded to another origin.
