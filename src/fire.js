@@ -53,7 +53,7 @@ export async function fireRequest({ connector, request, variables = {}, network 
         : await pinnedFetch(url, { method, headers, body, signal }, { addresses: guard.addresses });
       const location = response.status >= 300 && response.status < 400 ? response.headers.get('location') : null;
       if (!location) break;
-      await response.body?.cancel().catch(() => {});
+      await discardBody(response);
       if (hop >= MAX_REDIRECTS) return { ok: false, values: {}, status: response.status, error: 'Too many redirects' };
 
       const next = new URL(location, url);
@@ -110,4 +110,13 @@ async function readLimited(response, maxBytes) {
     chunks.push(value);
   }
   return Buffer.concat(chunks);
+}
+
+/** Release a redirect response's connection. Older Node versions throw on cancelling an already closed stream. */
+async function discardBody(response) {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // The body is already finished: nothing to release.
+  }
 }

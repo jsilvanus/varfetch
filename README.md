@@ -94,6 +94,10 @@ npm test    # node --test, no build step
 
 CI runs the tests on Node 18, 20 and 22.
 
+### Releases
+
+Versioning and publishing use [Changesets](https://github.com/changesets/changesets). For a user-facing change run `npm run changeset` and commit the file it creates. On merge to `main` the Release workflow opens a "Version Packages" PR; merging it publishes to npm through [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, no npm token stored). Do not edit `version` or run `npm publish` by hand. One-time setup: on npmjs.com, package `varfetch` → Settings → Trusted Publisher → GitHub Actions, repository `jsilvanus/varfetch`, workflow `release.yml`.
+
 ## License
 
 EUPL-1.2.

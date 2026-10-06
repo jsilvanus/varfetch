@@ -14,7 +14,6 @@
 import http from 'node:http';
 import https from 'node:https';
 import zlib from 'node:zlib';
-import { Readable } from 'node:stream';
 
 const NULL_BODY_STATUS = new Set([101, 204, 205, 304]);
 
@@ -102,7 +101,7 @@ function toResponse(res) {
     stream.resume();
     return new Response(null, { status, headers: responseHeaders });
   }
-  return new Response(Readable.toWeb(stream), { status, headers: responseHeaders });
+  return new Response(toWebStream(stream), { status, headers: responseHeaders });
 }
 
 function decoderFor(encoding) {
@@ -117,4 +116,38 @@ function decoderFor(encoding) {
     default:
       return null;
   }
+}
+
+/**
+ * Node stream -> web ReadableStream with backpressure. Readable.toWeb is avoided on purpose:
+ * on Node 18 it closes the controller twice for a response that ends before it is read.
+ */
+function toWebStream(stream) {
+  let finished = false;
+  return new ReadableStream({
+    start(controller) {
+      stream.on('data', (chunk) => {
+        if (finished) return;
+        controller.enqueue(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+        if (controller.desiredSize <= 0) stream.pause();
+      });
+      stream.on('end', () => {
+        if (finished) return;
+        finished = true;
+        controller.close();
+      });
+      stream.on('error', (err) => {
+        if (finished) return;
+        finished = true;
+        controller.error(err);
+      });
+    },
+    pull() {
+      stream.resume();
+    },
+    cancel() {
+      finished = true;
+      stream.destroy();
+    },
+  });
 }
