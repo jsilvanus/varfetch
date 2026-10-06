@@ -11,11 +11,25 @@
       "default": "./src/index.js"
     }
   },
-  "files": ["src", "docs", "LICENSE", "README.md", "CHANGELOG.md"],
+  "files": [
+    "src",
+    "docs",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "changeset": "changeset"
   },
-  "keywords": ["http", "variables", "api", "connector", "ssrf", "jsonpath"],
+  "keywords": [
+    "http",
+    "variables",
+    "api",
+    "connector",
+    "ssrf",
+    "jsonpath"
+  ],
   "author": "Juha Itäleino <jsilvanus@gmail.com>",
   "license": "EUPL-1.2",
   "engines": {
@@ -28,5 +42,12 @@
   "bugs": {
     "url": "https://github.com/jsilvanus/varfetch/issues"
   },
-  "homepage": "https://github.com/jsilvanus/varfetch#readme"
+  "homepage": "https://github.com/jsilvanus/varfetch#readme",
+  "devDependencies": {
+    "@changesets/cli": "^2.31.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
 }
